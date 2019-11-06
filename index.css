@@ -1,0 +1,11 @@
+tbody tr:nth-child(odd) {
+    background: lightgray;
+}
+
+label {
+    font-weight: bold;
+}
+
+* {
+    font-family: Arial, Helvetica, sans-serif;
+}
