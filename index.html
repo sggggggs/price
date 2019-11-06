@@ -2,43 +2,63 @@
     <head>
         <title>price</title>
         <style>
-            table#recipe-container tr:nth-child(even) {
+            table tr:nth-child(even) {
                 background: lightgray;
             }
 
-            .total-label {
+            label {
                 font-weight: bold;
+            }
+
+            * {
+                font-family: Arial, Helvetica, sans-serif;
             }
         </style>
     </head>
     <body>
         <main>
-        <form id="item-form">
-            <input type="text" name="item-name" value="Tincture of Strength">
-            <input type="number" name="item-amount" value="50" min="1">
-            <input type="submit">
-        </form>
-        <div>
-            <img class="item-icon"><span class="item-name"></span>
-        </div>
-        <table id="recipe-container">
+            <form id="item-form">
+                <label>Item: </label><input type="text" name="item-name" value="Tincture of Strength">
+                <label>Amount: </label><input type="number" name="item-amount" value="50" min="1">
+                <input type="submit">
+            </form>
+            <hr>
+            <table>
+                <thead>
+                    <tr>
+                        <td><img class="item-icon" src="https://xivapi.com/i/000000/000000.png"></td>
+                        <td><span class="item-name"></span></td>
+                        <td><span class="item-amount"></span></td>
+                        <td><span class="item-price"></span></td>
+                    </tr>
+                    <tr>
+                        <th></th>
+                        <th>Item</th>
+                        <th>Amount</th>
+                        <th>Price</th>
+                    </tr>
+                </thead>
+                <tbody id="recipe-container">
 
-        </table>
-        <span class="total-label">Total: </span><span id="total"></span>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td><label>Total: </label></td>
+                        <td><span id="total"></span></td>
+                    </tr>
+                </tfoot>
+            </table>
         </main>
         <footer>
+                <hr>
             <a href="https://xivapi.com/">XIVAPI</a>
             <a href="https://universalis.app/">Universalis</a>
         </footer>
     </body>
 </html>
 <template id="item-header-template">
-    <tr>
-        <th></th>
-        <th>Item</th>
-        <th>Amount</th>
-        <th>Price</th>
-    </tr>
 </template>
 <template id="item-row-template">
     <tr>
@@ -50,7 +70,6 @@
 </template>
 <script>
 
-
 let itemForm = document.getElementById("item-form");
 let itemHeaderTemplate = document.getElementById("item-header-template");
 let itemRowTemplate = document.getElementById("item-row-template");
@@ -59,11 +78,15 @@ let totalSpan = document.getElementById("total");
 
 let itemIcon = document.querySelector(".item-icon");
 let itemName = document.querySelector(".item-name");
+let itemAmount = document.querySelector(".item-amount");
+let itemPrice = document.querySelector(".item-price");
 
-async function getItemInfo(name) {
-    let response = await fetch(`https://xivapi.com/search?indexes=Item&string=${name}`, { mode: 'cors' });
-    let json = await response.json();
-    return json.Results[0];
+async function getItemInfo(name, amount) {
+    let response = await (await fetch(`https://xivapi.com/search?indexes=Item&string=${name}`, { mode: 'cors' })).json();
+    let info = response.Results[0];
+    info.Amount = amount;
+    info.Price = await getItemPrice(info.ID, amount);
+    return info;
 }
 
 async function getItemRecipe(ID, amount) {
@@ -120,14 +143,11 @@ function makeItemRow(item) {
     return row;
 }
 
-function makeItemHeader(item) {
-    let row = itemHeaderTemplate.content.cloneNode(true);
-    return row;
-}
-
-function displayItemInfo(info) {
+function displayItemInfo(info, amount) {
     itemIcon.src = `https://xivapi.com${info.Icon}`;
     itemName.textContent = info.Name;
+    itemAmount.textContent = info.Amount.toLocaleString();
+    itemPrice.textContent = info.Price.toLocaleString();
 }
 
 function displayItemRecipe(recipe) {
@@ -135,16 +155,9 @@ function displayItemRecipe(recipe) {
         recipeContainer.removeChild(recipeContainer.firstChild);
     }
 
-    recipeContainer.append(makeItemHeader());
-
     recipe.forEach(ingredient => {
         recipeContainer.append(makeItemRow(ingredient));
     });
-}
-
-async function run() {
-    let info = await getItemInfo("Aiming");
-    displayItemInfo(info);
 }
 
 async function onSubmit(event) {
@@ -155,10 +168,9 @@ async function onSubmit(event) {
     let name = elements["item-name"].value;
     let craftAmount = Number(elements["item-amount"].value);
     
-    let info = await getItemInfo(name);
+    let info = await getItemInfo(name, craftAmount);
     displayItemInfo(info);
 
-    recipeContainer.textContent = "Loading...";
     let recipe = await getItemRecipe(info.ID, craftAmount);
     displayItemRecipe(recipe);
 
