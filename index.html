@@ -1,11 +1,21 @@
 <html>
     <head>
         <title>price</title>
+        <style>
+            table#recipe-container tr:nth-child(even) {
+                background: lightgray;
+            }
+
+            .total-label {
+                font-weight: bold;
+            }
+        </style>
     </head>
     <body>
+        <main>
         <form id="item-form">
             <input type="text" name="item-name" value="Tincture of Strength">
-            <input type="number" name="item-count" value="1" min="1">
+            <input type="number" name="item-amount" value="50" min="1">
             <input type="submit">
         </form>
         <div>
@@ -14,21 +24,38 @@
         <table id="recipe-container">
 
         </table>
+        <span class="total-label">Total: </span><span id="total"></span>
+        </main>
+        <footer>
+            <a href="https://xivapi.com/">XIVAPI</a>
+            <a href="https://universalis.app/">Universalis</a>
+        </footer>
     </body>
 </html>
+<template id="item-header-template">
+    <tr>
+        <th></th>
+        <th>Item</th>
+        <th>Amount</th>
+        <th>Price</th>
+    </tr>
+</template>
 <template id="item-row-template">
     <tr>
         <td><img class="item-icon"></td>
         <td><span class="item-name"></span></td>
         <td><span class="item-amount"></span></td>
+        <td><span class="item-price"></span></td>
     </tr>
 </template>
 <script>
 
 
 let itemForm = document.getElementById("item-form");
+let itemHeaderTemplate = document.getElementById("item-header-template");
 let itemRowTemplate = document.getElementById("item-row-template");
 let recipeContainer = document.getElementById("recipe-container");
+let totalSpan = document.getElementById("total");
 
 let itemIcon = document.querySelector(".item-icon");
 let itemName = document.querySelector(".item-name");
@@ -39,7 +66,7 @@ async function getItemInfo(name) {
     return json.Results[0];
 }
 
-async function getItemRecipe(ID) {
+async function getItemRecipe(ID, amount) {
     let item = await (await fetch(`https://xivapi.com/item/${ID}`)).json();
     let recipe = await (await fetch(`https://xivapi.com/recipe/${item.Recipes[0].ID}`)).json();
 
@@ -51,7 +78,8 @@ async function getItemRecipe(ID) {
                 "ID": ingredient.ID,
                 "Icon": ingredient.Icon,
                 "Name": ingredient.Name,
-                "Amount": recipe[`AmountIngredient${i}`]
+                "Amount": recipe[`AmountIngredient${i}`] * amount,
+                "Price": await getItemPrice(ingredient.ID, recipe[`AmountIngredient${i}`] * amount)
             });
         }
     }
@@ -59,16 +87,45 @@ async function getItemRecipe(ID) {
     return ingredients;
 }
 
+async function getItemPrice(ID, amount) {
+    let response = await (await fetch(`https://universalis.app/api/Crystal/${ID}`)).json();
+    let listings = response.listings;
+    let price = 0;
+    let lastPrice = 0;
+    while (amount > 0) {
+        if (listings.length > 0) {
+            if (listings[0].quantity <= 0) {
+                listings.shift();
+            }
+
+            price += listings[0].pricePerUnit;
+            lastPrice = listings[0].pricePerUnit;
+            listings[0].quantity -= 1;
+        } else {
+            price += lastPrice;
+        }
+
+        amount -= 1;
+    }
+    
+    return price;
+}
+
 function makeItemRow(item) {
     let row = itemRowTemplate.content.cloneNode(true);
     row.querySelector(".item-icon").src = `https://xivapi.com${item.Icon}`;
     row.querySelector(".item-name").textContent = item.Name;
-    row.querySelector(".item-amount").textContent = item.Amount;
+    row.querySelector(".item-amount").textContent = item.Amount.toLocaleString();
+    row.querySelector(".item-price").textContent = item.Price.toLocaleString();
+    return row;
+}
+
+function makeItemHeader(item) {
+    let row = itemHeaderTemplate.content.cloneNode(true);
     return row;
 }
 
 function displayItemInfo(info) {
-    console.log(info);
     itemIcon.src = `https://xivapi.com${info.Icon}`;
     itemName.textContent = info.Name;
 }
@@ -77,6 +134,8 @@ function displayItemRecipe(recipe) {
     while (recipeContainer.firstChild) {
         recipeContainer.removeChild(recipeContainer.firstChild);
     }
+
+    recipeContainer.append(makeItemHeader());
 
     recipe.forEach(ingredient => {
         recipeContainer.append(makeItemRow(ingredient));
@@ -89,16 +148,23 @@ async function run() {
 }
 
 async function onSubmit(event) {
+    totalSpan.textContent = "";
+
     event.preventDefault();
     let elements = event.target.elements;
     let name = elements["item-name"].value;
-    let count = Number(elements["item-count"].value);
+    let craftAmount = Number(elements["item-amount"].value);
     
     let info = await getItemInfo(name);
     displayItemInfo(info);
 
-    let recipe = await getItemRecipe(info.ID);
+    recipeContainer.textContent = "Loading...";
+    let recipe = await getItemRecipe(info.ID, craftAmount);
     displayItemRecipe(recipe);
+
+    let total = 0;
+    recipe.forEach(ingredient => total += ingredient.Price);
+    totalSpan.textContent = total.toLocaleString();
 }
 
 itemForm.addEventListener("submit", onSubmit, false);
