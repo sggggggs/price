@@ -26,7 +26,6 @@ async function getItemInfo(name, amount) {
 async function getItemRecipe(ID, amount) {
     let item = await (await fetch(`https://xivapi.com/item/${ID}`)).json();
     let recipe = await (await fetch(`https://xivapi.com/recipe/${item.Recipes[0].ID}`)).json();
-    console.log(recipe);
     let ingredients = [];
     for (let i = 0; i <= 9; i++) {
         if (recipe[`AmountIngredient${i}`] > 0) {
