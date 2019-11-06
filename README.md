@@ -1,2 +1,2 @@
 # price
-https://waharris.github.io/price/
+https://sggggggs.github.io/price/
