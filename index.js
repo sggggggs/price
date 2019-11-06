@@ -9,19 +9,24 @@ let itemIcon = document.querySelector(".item-icon");
 let itemName = document.querySelector(".item-name");
 let itemAmount = document.querySelector(".item-amount");
 let itemPrice = document.querySelector(".item-price");
+let itemPriceNQ = document.querySelector(".item-price-nq");
+let itemPriceHQ = document.querySelector(".item-price-hq");
 
 async function getItemInfo(name, amount) {
     let response = await (await fetch(`https://xivapi.com/search?indexes=Item&string=${name}`, { mode: 'cors' })).json();
     let info = response.Results[0];
     info.Amount = amount;
-    info.Price = await getItemPrice(info.ID, amount);
+    info.Price = await getItemPrice(info.ID, 1) * amount;
+    info.PriceNQ = await getItemPrice(info.ID, 1, "NQ") * amount;
+    info.PriceHQ = await getItemPrice(info.ID, 1, "HQ") * amount;
+    info.Yield = await getYield(info.ID);
     return info;
 }
 
 async function getItemRecipe(ID, amount) {
     let item = await (await fetch(`https://xivapi.com/item/${ID}`)).json();
     let recipe = await (await fetch(`https://xivapi.com/recipe/${item.Recipes[0].ID}`)).json();
-
+    console.log(recipe);
     let ingredients = [];
     for (let i = 0; i <= 9; i++) {
         if (recipe[`AmountIngredient${i}`] > 0) {
@@ -31,7 +36,9 @@ async function getItemRecipe(ID, amount) {
                 "Icon": ingredient.Icon,
                 "Name": ingredient.Name,
                 "Amount": recipe[`AmountIngredient${i}`] * amount,
-                "Price": await getItemPrice(ingredient.ID, recipe[`AmountIngredient${i}`] * amount)
+                "Price": await getItemPrice(ingredient.ID, recipe[`AmountIngredient${i}`] * amount),
+                "PriceNQ": await getItemPrice(ingredient.ID, recipe[`AmountIngredient${i}`] * amount, "NQ"),
+                "PriceHQ": await getItemPrice(ingredient.ID, recipe[`AmountIngredient${i}`] * amount, "HQ")
             });
         }
     }
@@ -39,7 +46,7 @@ async function getItemRecipe(ID, amount) {
     return ingredients;
 }
 
-async function getItemPrice(ID, amount) {
+async function getItemPrice(ID, amount, quality) {
     let response = await (await fetch(`https://universalis.app/api/Crystal/${ID}`)).json();
     let listings = response.listings;
     let price = 0;
@@ -51,20 +58,32 @@ async function getItemPrice(ID, amount) {
             }
 
             if (listings.length > 0) {
+
+                listings[0].quantity -= 1;
+                if (quality === "NQ" && listings[0].hq) continue;
+                if (quality === "HQ" && !listings[0].hq) continue;
+
                 price += listings[0].pricePerUnit;
                 lastPrice = listings[0].pricePerUnit;
-                listings[0].quantity -= 1;
+                amount -= 1;
             } else {
                 price += lastPrice;
+                amount -= 1;
             }
         } else {
             price += lastPrice;
+            amount -= 1;
         }
 
-        amount -= 1;
     }
     
     return price;
+}
+
+async function getYield(ID) {
+    let item = await (await fetch(`https://xivapi.com/item/${ID}`)).json();
+    let recipe = await (await fetch(`https://xivapi.com/recipe/${item.Recipes[0].ID}`)).json();
+    return recipe.AmountResult;
 }
 
 function makeItemRow(item) {
@@ -73,14 +92,18 @@ function makeItemRow(item) {
     row.querySelector(".item-name").textContent = item.Name;
     row.querySelector(".item-amount").textContent = item.Amount.toLocaleString();
     row.querySelector(".item-price").textContent = item.Price.toLocaleString();
+    row.querySelector(".item-price-nq").textContent = item.PriceNQ.toLocaleString();
+    row.querySelector(".item-price-hq").textContent = item.PriceHQ.toLocaleString();
     return row;
 }
 
 function displayItemInfo(info, amount) {
     itemIcon.src = `https://xivapi.com${info.Icon}`;
     itemName.textContent = info.Name;
-    itemAmount.textContent = info.Amount.toLocaleString();
-    itemPrice.textContent = info.Price.toLocaleString();
+    itemAmount.textContent = (info.Amount * info.Yield).toLocaleString();
+    itemPrice.textContent = (info.Price * info.Yield).toLocaleString();
+    itemPriceNQ.textContent = (info.PriceNQ * info.Yield).toLocaleString();
+    itemPriceHQ.textContent = (info.PriceHQ * info.Yield).toLocaleString();
 }
 
 function displayItemRecipe(recipe) {
@@ -100,7 +123,7 @@ async function onSubmit(event) {
     let elements = event.target.elements;
     let name = elements["item-name"].value;
     let craftAmount = Number(elements["item-amount"].value);
-    
+
     let info = await getItemInfo(name, craftAmount);
     displayItemInfo(info);
 
